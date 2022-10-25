@@ -22,6 +22,29 @@ pipeline {
             '''   
          }
       }
+      stage('Code Security') {
+         steps {
+            parallel(
+               dependency: {
+                  sh '''
+                     docker run --env SECURE_LOG_LEVEL=${SECURE_LOG_LEVEL} -v "$PWD"/backend:/code -v /var/run/docker.sock:/var/run/docker.sock registry.gitlab.com/gitlab-org/security-products/dependency-scanning:latest /code
+
+                     echo "Scan Report Created Successfully, " 
+                     // Scan Id:" $SCAN_ID
+                  '''
+               },
+               sast: {
+                  // echo 'SAST'
+                  sh '''
+                    docker run --volume "$PWD"/backend:/code --volume /var/run/docker.sock:/var/run/docker.sock registry.gitlab.com/gitlab-org/security-products/sast:latest /app/bin/run /code
+
+                     echo "Scan Report Created Successfully"
+                     // , Scan Id:" $SCAN_ID
+                  '''
+               }
+            )
+         }
+      }      
       stage('Archive') {
          steps {
             parallel(
@@ -124,6 +147,26 @@ pipeline {
                echo 'UAT Tests'
          }
       }
+      stage('DAST') {
+         steps {
+               sh '''
+                  # remove wrk folder
+                  rm -rf wrk
+
+                  # create wrk folder
+                  mkdir wrk
+
+                  chmod 777 wrk
+                  docker run \
+                     --volume $(pwd)/wrk:/output:rw \
+                     --volume $(pwd)/wrk:/zap/wrk:rw \
+                     registry.gitlab.com/gitlab-org/security-products/dast:latest /analyze -t http://staging.devops -x report.xml
+
+
+                 echo "Scan Report Created"
+               '''
+         }
+      }      
       stage('Production Setup') {
          steps {
             parallel(
