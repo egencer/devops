@@ -27,24 +27,30 @@ pipeline {
             parallel(
                dependency: {
                   sh '''
-                     docker run --env SECURE_LOG_LEVEL=${SECURE_LOG_LEVEL} -v "$PWD"/backend:/code -v /var/run/docker.sock:/var/run/docker.sock registry.gitlab.com/gitlab-org/security-products/dependency-scanning:latest /code
+                     mkdir -p report
+                     chmod 777 report
+                     docker run --rm -v "$PWD":/code -v "$PWD"/report:/report  registry.gitlab.com/gitlab-ci-utils/docker-dependency-check:latest -f JSON  -s /code/frontend -o /report/frontend_dependency_check_result.json  --project devops
+                     docker run --rm -v "$PWD":/code -v "$PWD"/report:/report  registry.gitlab.com/gitlab-ci-utils/docker-dependency-check:latest -f JSON  -s /code/backend -o /report/backend_dependency_check_result.json  --project devops
 
-                     echo "Scan Report Created Successfully, " 
-                     // Scan Id:" $SCAN_ID
+                     echo "Scan Report Creted Successfully" 
+                     
                   '''
                },
+               // sast: {
+               //    sh 'pip3 install semgrep'
+               //    sh 'semgrep ci'
+                  
+               // }
                sast: {
-                  // echo 'SAST'
                   sh '''
-                    docker run --volume "$PWD"/backend:/code --volume /var/run/docker.sock:/var/run/docker.sock registry.gitlab.com/gitlab-org/security-products/sast:latest /app/bin/run /code
-
-                     echo "Scan Report Created Successfully"
-                     // , Scan Id:" $SCAN_ID
+                     mkdir -p semgrep
+                     chmod 777 semgrep
+                     docker run --rm -v "$PWD"/semgrep:/semgrep -v "$PWD":/src returntocorp/semgrep --config auto --output /semgrep/semgrep_result.json --json
                   '''
                }
             )
          }
-      }      
+      }    
       stage('Archive') {
          steps {
             parallel(
@@ -162,11 +168,12 @@ pipeline {
                      --volume $(pwd)/wrk:/zap/wrk:rw \
                      registry.gitlab.com/gitlab-org/security-products/dast:latest /analyze -t http://staging.devops -x report.xml
 
+   
 
                  echo "Scan Report Created"
                '''
          }
-      }      
+      }  
       stage('Production Setup') {
          steps {
             parallel(
